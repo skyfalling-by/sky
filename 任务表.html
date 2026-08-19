@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#6c5ce7">
+<title>我的任务表</title>
+<style>
+  :root{
+    --bg:#f5f6fa;
+    --card:#ffffff;
+    --text:#1f2430;
+    --muted:#8a91a3;
+    --line:#e7e9f0;
+    --accent:#6c5ce7;
+    --accent-soft:#efeaff;
+    --danger:#e5484d;
+    --ok:#2fbf71;
+    --radius:14px;
+    --shadow:0 1px 3px rgba(20,24,40,.06), 0 8px 24px rgba(20,24,40,.06);
+    --safe-b:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* 顶部 */
+  header{
+    position:sticky;top:0;z-index:20;
+    background:var(--accent);color:#fff;
+    padding:16px 18px 12px;
+    padding-top:calc(16px + env(safe-area-inset-top,0px));
+  }
+  header .bar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  header h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.5px}
+  header .sub{font-size:12px;opacity:.85;margin-top:2px}
+  .icon-btn{
+    border:none;background:rgba(255,255,255,.18);color:#fff;
+    width:40px;height:40px;border-radius:12px;cursor:pointer;
+    font-size:18px;display:inline-flex;align-items:center;justify-content:center;
+    flex:0 0 auto;transition:background .15s;
+  }
+  .icon-btn:hover{background:rgba(255,255,255,.3)}
+  .header-actions{display:flex;gap:8px}
+
+  /* 筛选区 */
+  .filters{
+    position:sticky;top:0;z-index:15;
+    background:var(--bg);padding:10px 14px 8px;
+  }
+  .chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{
+    flex:0 0 auto;border:1px solid var(--line);background:var(--card);color:var(--muted);
+    padding:7px 14px;border-radius:999px;font-size:14px;cursor:pointer;white-space:nowrap;
+    display:inline-flex;align-items:center;gap:6px;transition:all .15s;user-select:none;
+  }
+  .chip .dot{width:9px;height:9px;border-radius:50%}
+  .chip.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .chip.active .dot{box-shadow:0 0 0 2px rgba(255,255,255,.4)}
+
+  /* 主体 */
+  main{max-width:760px;margin:0 auto;padding:8px 14px 120px}
+  .section-title{font-size:13px;color:var(--muted);margin:14px 4px 8px;font-weight:600;letter-spacing:.5px}
+
+  /* 任务卡片 */
+  .task{
+    background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
+    margin-bottom:10px;padding:14px;position:relative;
+    animation:fadein .18s ease;
+  }
+  @keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .task-row{display:flex;align-items:flex-start;gap:12px}
+  .check{
+    flex:0 0 auto;width:24px;height:24px;border-radius:8px;border:2px solid #cdd2dd;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;margin-top:1px;
+    transition:all .15s;background:#fff;color:#fff;font-size:15px;font-weight:700;
+  }
+  .check.done{background:var(--ok);border-color:var(--ok)}
+  .task-body{flex:1;min-width:0}
+  .task-title{font-size:16px;font-weight:600;word-break:break-word}
+  .task.done .task-title{color:var(--muted);text-decoration:line-through}
+  .task-meta{display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap}
+  .tag{font-size:11px;padding:2px 9px;border-radius:999px;font-weight:600;display:inline-flex;align-items:center;gap:5px}
+  .tag .dot{width:7px;height:7px;border-radius:50%}
+  .progress-wrap{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:7px}
+  .progress-bar{width:70px;height:5px;background:var(--line);border-radius:999px;overflow:hidden}
+  .progress-bar i{display:block;height:100%;background:var(--ok);border-radius:999px;transition:width .25s}
+  .count{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+  /* 展开箭头 */
+  .toggle{
+    flex:0 0 auto;width:28px;height:28px;border:none;background:transparent;color:var(--muted);
+    cursor:pointer;font-size:14px;border-radius:8px;transition:transform .2s, background .15s;
+  }
+  .toggle.open{transform:rotate(90deg)}
+  .toggle:hover{background:var(--bg)}
+
+  /* 子任务 */
+  .subtasks{margin:6px 0 0 36px;padding-left:12px;border-left:2px solid var(--line)}
+  .subtask{display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line)}
+  .subtask:last-child{border-bottom:none}
+  .subtask .check{width:20px;height:20px;border-radius:6px;font-size:12px}
+  .subtask .task-title{font-size:14.5px;font-weight:500}
+  .subtask.done .task-title{color:var(--muted);text-decoration:line-through}
+  .subtask-actions{margin-left:auto;display:flex;gap:2px;opacity:0;transition:opacity .15s}
+  .subtask:hover .subtask-actions,.task:hover .task-actions{opacity:1}
+
+  /* 操作按钮 */
+  .task-actions{display:flex;gap:2px;opacity:0;transition:opacity .15s}
+  .mini-btn{
+    border:none;background:transparent;color:var(--muted);cursor:pointer;
+    width:28px;height:28px;border-radius:8px;font-size:14px;display:inline-flex;
+    align-items:center;justify-content:center;transition:background .15s;
+  }
+  .mini-btn:hover{background:var(--bg)}
+  .mini-btn.danger:hover{color:var(--danger);background:#fdeaeb}
+
+  /* 空状态 */
+  .empty{text-align:center;padding:60px 20px;color:var(--muted)}
+  .empty .big{font-size:52px;margin-bottom:12px}
+  .empty h3{margin:0 0 6px;color:var(--text);font-size:17px}
+  .empty p{margin:0 0 18px;font-size:14px}
+
+  /* 悬浮添加按钮 */
+  .fab{
+    position:fixed;right:18px;bottom:calc(24px + var(--safe-b));z-index:30;
+    width:58px;height:58px;border-radius:50%;border:none;background:var(--accent);color:#fff;
+    font-size:28px;cursor:pointer;box-shadow:0 6px 20px rgba(108,92,231,.45);
+    display:flex;align-items:center;justify-content:center;transition:transform .15s;
+  }
+  .fab:active{transform:scale(.92)}
+
+  /* 弹窗 */
+  .overlay{
+    position:fixed;inset:0;background:rgba(20,24,40,.45);z-index:40;
+    display:flex;align-items:flex-end;justify-content:center;
+    opacity:0;pointer-events:none;transition:opacity .2s;
+  }
+  .overlay.show{opacity:1;pointer-events:auto}
+  .sheet{
+    background:var(--card);width:100%;max-width:560px;border-radius:20px 20px 0 0;
+    padding:10px 18px calc(18px + var(--safe-b));max-height:88vh;overflow-y:auto;
+    transform:translateY(20px);transition:transform .25s;
+  }
+  .overlay.show .sheet{transform:none}
+  .sheet .grab{width:40px;height:4px;background:var(--line);border-radius:99px;margin:4px auto 14px}
+  .sheet h2{margin:0 0 16px;font-size:18px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px;font-weight:600}
+  .field input,.field select{
+    width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;
+    font-size:15px;background:var(--bg);color:var(--text);outline:none;
+    font-family:inherit;transition:border .15s;
+  }
+  .field input:focus,.field select:focus{border-color:var(--accent)}
+  .btn-row{display:flex;gap:10px;margin-top:18px}
+  .btn{
+    flex:1;padding:13px;border-radius:12px;border:none;font-size:15px;font-weight:600;
+    cursor:pointer;font-family:inherit;transition:opacity .15s;
+  }
+  .btn:active{opacity:.8}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.ghost{background:var(--bg);color:var(--muted)}
+  .btn.danger{background:#fdeaeb;color:var(--danger)}
+  .color-row{display:flex;gap:8px;flex-wrap:wrap}
+  .color-dot{width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .12s}
+  .color-dot.active{border-color:var(--text);transform:scale(1.1)}
+
+  @media (min-width:640px){
+    .overlay{align-items:center;padding:24px}
+    .sheet{border-radius:20px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <div>
+      <h1>📋 我的任务表</h1>
+      <div class="sub" id="statSub"></div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="btnCat" title="管理分类">🏷️</button>
+      <button class="icon-btn" id="btnMore" title="更多">⋯</button>
+    </div>
+  </div>
+</header>
+
+<div class="filters">
+  <div class="chips" id="chips"></div>
+</div>
+
+<main>
+  <div id="list"></div>
+</main>
+
+<button class="fab" id="fab" title="新建任务">＋</button>
+
+<!-- 任务弹窗 -->
+<div class="overlay" id="taskOverlay">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2 id="taskSheetTitle">新建任务</h2>
+    <div class="field">
+      <label>任务名称</label>
+      <input id="fTitle" placeholder="要做什么？" maxlength="120">
+    </div>
+    <div class="field">
+      <label>分类</label>
+      <select id="fCat"></select>
+    </div>
+    <div class="field">
+      <label>所属大任务（留空则为独立大任务）</label>
+      <select id="fParent"><option value="">— 独立大任务 —</option></select>
+    </div>
+    <div class="btn-row">
+      <button class="btn ghost" id="btnCancelTask">取消</button>
+      <button class="btn primary" id="btnSaveTask">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 分类管理弹窗 -->
+<div class="overlay" id="catOverlay">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>管理分类</h2>
+    <div id="catList" style="margin-bottom:16px"></div>
+    <div style="border-top:1px solid var(--line);padding-top:14px">
+      <h3 style="font-size:14px;margin:0 0 10px">新建分类</h3>
+      <div class="field">
+        <label>分类名称</label>
+        <input id="fCatName" placeholder="如：工作 / 学习 / 生活" maxlength="20">
+      </div>
+      <div class="field">
+        <label>颜色</label>
+        <div class="color-row" id="colorRow"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn ghost" id="btnCancelCat">关闭</button>
+        <button class="btn primary" id="btnSaveCat">添加分类</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 更多弹窗 -->
+<div class="overlay" id="moreOverlay">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>更多</h2>
+    <div class="btn-row" style="flex-direction:column">
+      <button class="btn ghost" id="btnExport">📤 导出数据（备份）</button>
+      <button class="btn ghost" id="btnImport">📥 导入数据</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none">
+      <button class="btn danger" id="btnClear">🗑️ 清空全部任务</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ---------- 数据 ----------
+  const KEY = 'task-table-v1';
+  const COLORS = ['#6c5ce7','#0984e3','#00b894','#e17055','#fdcb6e','#e84393','#00cec9','#636e72','#d63031','#0984e3'];
+
+  let data = load();
+  function defaultData(){
+    return { categories:[], tasks:[] };
+  }
+  function load(){
+    try{
+      const raw = localStorage.getItem(KEY);
+      if(raw){ const d = JSON.parse(raw); if(d && Array.isArray(d.categories) && Array.isArray(d.tasks)) return d; }
+    }catch(e){}
+    return defaultData();
+  }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){} }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  // ---------- 状态 ----------
+  let filterCat = 'all';   // 'all' | categoryId | 'none'
+  let filterStatus = 'all';// 'all' | 'active' | 'done'
+  let editingTaskId = null;
+  let pickColor = COLORS[0];
+
+  // ---------- DOM ----------
+  const $ = id => document.getElementById(id);
+  const listEl = $('list'), chipsEl = $('chips'), statSub = $('statSub');
+
+  // ---------- 工具 ----------
+  function catById(id){ return data.categories.find(c => c.id === id); }
+  function catColor(id){ const c = catById(id); return c ? c.color : '#b0b7c3'; }
+  function catName(id){ const c = catById(id); return c ? c.name : '未分类'; }
+  function childrenOf(parentId){ return data.tasks.filter(t => t.parentId === parentId); }
+  function isParent(id){ return data.tasks.some(t => t.parentId === id); }
+  function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // ---------- 渲染 ----------
+  function renderChips(){
+    const cats = data.categories;
+    let html = `<div class="chip ${filterCat==='all'&&filterStatus==='all'?'active':''}" data-cat="all" data-status="all">全部</div>`;
+    html += `<div class="chip ${filterCat==='all'&&filterStatus==='active'?'active':''}" data-cat="all" data-status="active">⏳ 进行中</div>`;
+    html += `<div class="chip ${filterCat==='all'&&filterStatus==='done'?'active':''}" data-cat="all" data-status="done">✅ 已完成</div>`;
+    html += `<div class="chip" style="width:1px;padding:0;border-color:transparent;background:transparent"></div>`;
+    cats.forEach(c=>{
+      const active = filterCat===c.id && filterStatus==='all';
+      html += `<div class="chip ${active?'active':''}" data-cat="${c.id}" data-status="all"><span class="dot" style="background:${c.color}"></span>${esc(c.name)}</div>`;
+    });
+    if(data.tasks.some(t=>!t.categoryId)){
+      const active = filterCat==='none' && filterStatus==='all';
+      html += `<div class="chip ${active?'active':''}" data-cat="none" data-status="all"><span class="dot" style="background:#b0b7c3"></span>未分类</div>`;
+    }
+    chipsEl.innerHTML = html;
+  }
+
+  function taskMatches(t){
+    if(filterStatus==='active' && t.done) return false;
+    if(filterStatus==='done' && !t.done) return false;
+    if(filterCat==='none' && t.categoryId) return false;
+    if(filterCat!=='all' && filterCat!=='none' && t.categoryId!==filterCat) return false;
+    return true;
+  }
+
+  function renderSubtask(t){
+    return `<div class="subtask ${t.done?'done':''}" data-id="${t.id}">
+      <div class="check ${t.done?'done':''}" data-check="${t.id}">${t.done?'✓':''}</div>
+      <div class="task-title">${esc(t.title)}</div>
+      <div class="subtask-actions">
+        <button class="mini-btn" data-edit="${t.id}" title="编辑">✎</button>
+        <button class="mini-btn danger" data-del="${t.id}" title="删除">✕</button>
+      </div>
+    </div>`;
+  }
+
+  function renderTask(t){
+    const kids = childrenOf(t.id);
+    const doneKids = kids.filter(k=>k.done).length;
+    const total = kids.length + 1; // 含自身
+    const done = doneKids + (t.done?1:0);
+    const pct = Math.round(done/total*100);
+    const hasKids = kids.length > 0;
+    const cat = catById(t.categoryId);
+
+    let html = `<div class="task ${t.done?'done':''}" data-id="${t.id}">`;
+    html += `<div class="task-row">`;
+    html += `<div class="check ${t.done?'done':''}" data-check="${t.id}">${t.done?'✓':''}</div>`;
+    html += `<div class="task-body">`;
+    html += `<div class="task-title">${esc(t.title)}</div>`;
+    html += `<div class="task-meta">`;
+    if(cat) html += `<span class="tag" style="background:${cat.color}18;color:${cat.color}"><span class="dot" style="background:${cat.color}"></span>${esc(cat.name)}</span>`;
+    if(hasKids){
+      html += `<span class="progress-wrap"><span class="progress-bar"><i style="width:${pct}%"></i></span><span class="count">${done}/${total}</span></span>`;
+    }
+    html += `</div></div>`;
+    if(hasKids) html += `<button class="toggle open" data-toggle="${t.id}">▶</button>`;
+    html += `<div class="task-actions">`;
+    html += `<button class="mini-btn" data-addsub="${t.id}" title="添加子任务">＋</button>`;
+    html += `<button class="mini-btn" data-edit="${t.id}" title="编辑">✎</button>`;
+    html += `<button class="mini-btn danger" data-del="${t.id}" title="删除">✕</button>`;
+    html += `</div></div>`;
+    if(hasKids){
+      html += `<div class="subtasks" data-sub="${t.id}">${kids.map(renderSubtask).join('')}</div>`;
+    }
+    html += `</div>`;
+    return html;
+  }
+
+  function renderList(){
+    // 顶层任务（parentId 为 null 或 '' 或不存在）
+    const roots = data.tasks.filter(t => !t.parentId || !data.tasks.some(p=>p.id===t.parentId));
+    // 按创建顺序稳定排序
+    roots.sort((a,b)=> (a.created||0) - (b.created||0));
+
+    let visible = 0;
+    let html = '';
+    roots.forEach(t=>{
+      const kids = childrenOf(t.id).filter(taskMatches);
+      const selfMatch = taskMatches(t);
+      if(!selfMatch && kids.length===0) return;
+      // 如果父任务被筛掉但子任务匹配，仍需显示父任务外壳
+      const showParent = selfMatch || kids.length>0;
+      if(showParent){
+        visible++;
+        // 简化：显示父任务，子任务在子树里已过滤
+        html += renderTaskWithFilter(t);
+      }
+    });
+
+    if(visible===0){
+      html = `<div class="empty">
+        <div class="big">🗒️</div>
+        <h3>这里还空空的</h3>
+        <p>点击右下角的 <b>＋</b> 创建你的第一个大任务吧</p>
+      </div>`;
+    }
+    listEl.innerHTML = html;
+    updateStat();
+  }
+
+  function renderTaskWithFilter(t){
+    const kids = childrenOf(t.id).filter(taskMatches);
+    const doneKids = kids.filter(k=>k.done).length;
+    const total = kids.length + 1;
+    const done = doneKids + (t.done?1:0);
+    const pct = Math.round(done/total*100);
+    const cat = catById(t.categoryId);
+    const hasKids = kids.length > 0;
+
+    let html = `<div class="task ${t.done?'done':''}" data-id="${t.id}">`;
+    html += `<div class="task-row">`;
+    html += `<div class="check ${t.done?'done':''}" data-check="${t.id}">${t.done?'✓':''}</div>`;
+    html += `<div class="task-body">`;
+    html += `<div class="task-title">${esc(t.title)}</div>`;
+    html += `<div class="task-meta">`;
+    if(cat) html += `<span class="tag" style="background:${cat.color}18;color:${cat.color}"><span class="dot" style="background:${cat.color}"></span>${esc(cat.name)}</span>`;
+    if(hasKids){
+      html += `<span class="progress-wrap"><span class="progress-bar"><i style="width:${pct}%"></i></span><span class="count">${done}/${total}</span></span>`;
+    }
+    html += `</div></div>`;
+    if(hasKids) html += `<button class="toggle open" data-toggle="${t.id}">▶</button>`;
+    html += `<div class="task-actions">`;
+    html += `<button class="mini-btn" data-addsub="${t.id}" title="添加子任务">＋</button>`;
+    html += `<button class="mini-btn" data-edit="${t.id}" title="编辑">✎</button>`;
+    html += `<button class="mini-btn danger" data-del="${t.id}" title="删除">✕</button>`;
+    html += `</div></div>`;
+    if(hasKids){
+      html += `<div class="subtasks" data-sub="${t.id}">${kids.map(renderSubtask).join('')}</div>`;
+    }
+    html += `</div>`;
+    return html;
+  }
+
+  function updateStat(){
+    const active = data.tasks.filter(t=>!t.done).length;
+    const done = data.tasks.filter(t=>t.done).length;
+    statSub.textContent = `共 ${data.tasks.length} 项 · 进行中 ${active} · 已完成 ${done}`;
+  }
+
+  // ---------- 事件：勾选/展开/操作（事件委托） ----------
+  listEl.addEventListener('click', e=>{
+    const check = e.target.closest('[data-check]');
+    if(check){ toggleDone(check.dataset.check); return; }
+
+    const toggle = e.target.closest('[data-toggle]');
+    if(toggle){ toggleSub(toggle.dataset.toggle, toggle); return; }
+
+    const addsub = e.target.closest('[data-addsub]');
+    if(addsub){ openTaskModal(null, addsub.dataset.addsub); return; }
+
+    const edit = e.target.closest('[data-edit]');
+    if(edit){ openTaskModal(edit.dataset.edit); return; }
+
+    const del = e.target.closest('[data-del]');
+    if(del){ deleteTask(del.dataset.del); return; }
+  });
+
+  function toggleDone(id){
+    const t = data.tasks.find(x=>x.id===id);
+    if(!t) return;
+    t.done = !t.done;
+    // 父任务完成时，子任务可选地一起完成
+    if(t.done && isParent(id)){ childrenOf(id).forEach(k=>k.done=true); }
+    save(); renderAll();
+  }
+
+  function toggleSub(id, btn){
+    const box = document.querySelector(`[data-sub="${id}"]`);
+    if(!box) return;
+    if(box.style.display==='none'){ box.style.display=''; btn.classList.add('open'); }
+    else{ box.style.display='none'; btn.classList.remove('open'); }
+  }
+
+  function deleteTask(id){
+    const t = data.tasks.find(x=>x.id===id);
+    const count = 1 + childrenOf(id).length;
+    if(!confirm(`确定删除「${t ? t.title : ''}」${count>1?`及其 ${count-1} 个子任务`:''}？`)) return;
+    // 删除自身及所有后代
+    const remove = new Set([id]);
+    let changed = true;
+    while(changed){
+      changed = false;
+      data.tasks.forEach(x=>{ if(x.parentId && remove.has(x.parentId) && !remove.has(x.id)){ remove.add(x.id); changed=true; } });
+    }
+    data.tasks = data.tasks.filter(x=>!remove.has(x.id));
+    save(); renderAll();
+  }
+
+  // ---------- 任务弹窗 ----------
+  function openTaskModal(editId, presetParent){
+    editingTaskId = editId || null;
+    const t = editId ? data.tasks.find(x=>x.id===editId) : null;
+    $('taskSheetTitle').textContent = t ? '编辑任务' : '新建任务';
+    $('fTitle').value = t ? t.title : '';
+
+    // 分类下拉
+    let catHtml = '<option value="">未分类</option>';
+    data.categories.forEach(c=>{ catHtml += `<option value="${c.id}" ${t&&t.categoryId===c.id?'selected':''}>${esc(c.name)}</option>`; });
+    $('fCat').innerHTML = catHtml;
+
+    // 父任务下拉（排除自身及其后代，避免循环）
+    const exclude = new Set();
+    if(editId){
+      exclude.add(editId);
+      let changed=true;
+      while(changed){ changed=false; data.tasks.forEach(x=>{ if(x.parentId && exclude.has(x.parentId) && !exclude.has(x.id)){ exclude.add(x.id); changed=true; } }); }
+    }
+    let parentHtml = '<option value="">— 独立大任务 —</option>';
+    data.tasks.forEach(p=>{
+      if(p.id===editId || exclude.has(p.id)) return;
+      parentHtml += `<option value="${p.id}" ${t&&t.parentId===p.id?'selected':''}${presetParent===p.id?'selected':''}>${esc(p.title)}</option>`;
+    });
+    $('fParent').innerHTML = parentHtml;
+    if(presetParent && !t) $('fParent').value = presetParent;
+
+    $('taskOverlay').classList.add('show');
+    setTimeout(()=>$('fTitle').focus(), 250);
+  }
+  function closeTaskModal(){ $('taskOverlay').classList.remove('show'); }
+  $('btnCancelTask').onclick = closeTaskModal;
+  $('taskOverlay').addEventListener('click', e=>{ if(e.target===e.currentTarget) closeTaskModal(); });
+
+  $('btnSaveTask').onclick = ()=>{
+    const title = $('fTitle').value.trim();
+    if(!title){ $('fTitle').focus(); return; }
+    const cat = $('fCat').value || null;
+    const parent = $('fParent').value || null;
+
+    if(editingTaskId){
+      const t = data.tasks.find(x=>x.id===editingTaskId);
+      if(t){ t.title = title; t.categoryId = cat; t.parentId = parent; }
+    }else{
+      data.tasks.push({ id:uid(), title, categoryId:cat, parentId:parent, done:false, created:Date.now() });
+    }
+    save(); renderAll(); closeTaskModal();
+  };
+
+  // ---------- 分类弹窗 ----------
+  function renderCatManager(){
+    let html = '';
+    if(data.categories.length===0){
+      html = `<div class="empty" style="padding:20px"><p>还没有分类，先添加一个吧</p></div>`;
+    }else{
+      data.categories.forEach(c=>{
+        const cnt = data.tasks.filter(t=>t.categoryId===c.id).length;
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)">
+          <span class="dot" style="width:12px;height:12px;border-radius:50%;background:${c.color};flex:0 0 auto"></span>
+          <span style="flex:1;font-size:15px">${esc(c.name)} <span style="color:var(--muted);font-size:12px">(${cnt})</span></span>
+          <button class="mini-btn danger" data-delcat="${c.id}">✕</button>
+        </div>`;
+      });
+    }
+    $('catList').innerHTML = html;
+  }
+  $('btnCat').onclick = ()=>{ renderCatManager(); $('fCatName').value=''; $('catOverlay').classList.add('show'); };
+  $('btnCancelCat').onclick = ()=> $('catOverlay').classList.remove('show');
+  $('catOverlay').addEventListener('click', e=>{ if(e.target===e.currentTarget) $('catOverlay').classList.remove('show'); });
+
+  // 颜色选择
+  function renderColors(){
+    $('colorRow').innerHTML = COLORS.map(c=>`<div class="color-dot ${c===pickColor?'active':''}" data-color="${c}" style="background:${c}"></div>`).join('');
+  }
+  $('colorRow').addEventListener('click', e=>{
+    const dot = e.target.closest('[data-color]');
+    if(!dot) return;
+    pickColor = dot.dataset.color;
+    renderColors();
+  });
+
+  $('btnSaveCat').onclick = ()=>{
+    const name = $('fCatName').value.trim();
+    if(!name){ $('fCatName').focus(); return; }
+    data.categories.push({ id:uid(), name, color:pickColor });
+    save(); renderCatManager(); renderAll();
+    $('fCatName').value='';
+  };
+
+  $('catList').addEventListener('click', e=>{
+    const del = e.target.closest('[data-delcat]');
+    if(!del) return;
+    const id = del.dataset.delcat;
+    data.categories = data.categories.filter(c=>c.id!==id);
+    data.tasks.forEach(t=>{ if(t.categoryId===id) t.categoryId=null; });
+    save(); renderCatManager(); renderAll();
+  });
+
+  // ---------- 更多 ----------
+  $('btnMore').onclick = ()=> $('moreOverlay').classList.add('show');
+  $('moreOverlay').addEventListener('click', e=>{ if(e.target===e.currentTarget) $('moreOverlay').classList.remove('show'); });
+
+  $('btnExport').onclick = ()=>{
+    const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = '任务表备份-' + new Date().toISOString().slice(0,10) + '.json';
+    a.click(); URL.revokeObjectURL(url);
+  };
+  $('btnImport').onclick = ()=> $('importFile').click();
+  $('importFile').onchange = e=>{
+    const f = e.target.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = ()=>{
+      try{
+        const d = JSON.parse(r.result);
+        if(d && Array.isArray(d.categories) && Array.isArray(d.tasks)){
+          data = d; save(); renderAll(); $('moreOverlay').classList.remove('show');
+          alert('导入成功');
+        } else throw 0;
+      }catch(e){ alert('导入失败：文件格式不正确'); }
+    };
+    r.readAsText(f); e.target.value='';
+  };
+  $('btnClear').onclick = ()=>{
+    if(!confirm('确定清空全部任务和分类吗？此操作不可撤销（建议先导出备份）。')) return;
+    data = defaultData(); save(); renderAll(); $('moreOverlay').classList.remove('show');
+  };
+
+  // ---------- 筛选 ----------
+  chipsEl.addEventListener('click', e=>{
+    const chip = e.target.closest('[data-cat]');
+    if(!chip) return;
+    filterCat = chip.dataset.cat;
+    filterStatus = chip.dataset.status || 'all';
+    renderAll();
+  });
+
+  // ---------- 新建按钮 ----------
+  $('fab').onclick = ()=> openTaskModal(null);
+
+  // ---------- 渲染入口 ----------
+  function renderAll(){ renderChips(); renderList(); }
+
+  // 首次渲染
+  renderAll();
+
+  // 物理返回键/关闭弹窗（安卓）
+  window.addEventListener('keydown', e=>{
+    if(e.key==='Escape'){
+      [['taskOverlay'],['catOverlay'],['moreOverlay']].forEach(([id])=>{
+        $(id).classList.remove('show');
+      });
+    }
+  });
+})();
+</script>
+</body>
+</html>
