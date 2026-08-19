@@ -882,7 +882,7 @@
 
   function drawOverlay() {
     if (state === 'menu') {
-      overlay('坦克大战', ['回车键开始游戏', '守住基地 · 消灭敌人']);
+      overlay('坦克大战', ['点击画面或按回车开始', '守住基地 · 消灭敌人']);
     } else if (state === 'paused') {
       overlay('暂停', ['按 P 继续']);
     } else if (state === 'gameover') {
@@ -908,6 +908,12 @@
   }
 
   // ===================== 主循环 =====================
+  loadMap(1);   // 初始化地图，供菜单背景显示（否则首帧渲染会因 map 为空而崩溃）
+  canvas.addEventListener('click', function () {
+    if (state === 'menu' || state === 'gameover') startGame();
+    else if (state === 'stageclear') { level++; startLevel(); state = 'playing'; }
+    ensureAudio();
+  });
   let last = performance.now();
   function loop(now) {
     const dt = Math.min((now - last) / 1000, 0.05);
