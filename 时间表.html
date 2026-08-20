@@ -50,16 +50,26 @@
   .day:hover{background:var(--bg)}
   .day .num{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px}
   .day.today .num{background:var(--accent-soft);color:var(--accent);font-weight:700}
-  .day.selected .num{background:var(--accent);color:#fff;font-weight:700}
   .day.wk .num{color:#e17055}
-  .day.selected.wk .num{color:#fff}
+  .day.holiday .num{color:#e5484d}
+  .day.is-work .num{color:var(--text)}
+  .day.selected .num{background:var(--accent);color:#fff;font-weight:700}
+  .day .holiday-label{font-size:9px;line-height:1;color:#e5484d;font-weight:600;letter-spacing:.3px}
+  .day .holiday-label.work{color:#b0b7c3}
+  .day.dim .holiday-label{opacity:.4}
   .dots{display:flex;gap:3px;height:5px}
   .dots i{width:5px;height:5px;border-radius:50%;background:var(--accent);display:block}
   .dots i.done-all{background:var(--ok)}
+  .legend{display:flex;gap:14px;justify-content:center;font-size:11px;color:var(--muted);padding:8px 0 2px;flex-wrap:wrap}
+  .legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:0}
+  .legend i.h{background:#e5484d}
+  .legend i.w{background:#b0b7c3}
+  .legend i.t{background:var(--accent)}
 
   /* 当日任务区 */
   .day-panel{margin-top:16px}
   .day-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+  .day-head-left{display:flex;align-items:baseline;flex-wrap:wrap}
   .day-head h2{margin:0;font-size:18px}
   .day-head .weekday{color:var(--muted);font-size:13px;margin-left:8px}
   .day-head .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -127,10 +137,18 @@
     </div>
     <div class="days" id="days"></div>
   </div>
+  <div class="legend">
+    <span><i class="h"></i>节假日</span>
+    <span><i class="w"></i>调休上班</span>
+    <span><i class="t"></i>有任务</span>
+  </div>
 
   <div class="day-panel">
     <div class="day-head">
-      <h2 id="dayTitle"></h2>
+      <div class="day-head-left">
+        <h2 id="dayTitle"></h2>
+        <span class="weekday" id="dayWeek"></span>
+      </div>
       <span class="count" id="dayCount"></span>
     </div>
     <div class="add-row">
@@ -147,6 +165,25 @@
   'use strict';
 
   const KEY = 'schedule-v1';
+
+  // ---------- 2026年法定节假日（来源：国务院办公厅通知） ----------
+  // 格式：日期 -> 节日名；调休上班的周末单独列出
+  const HOLIDAYS = {
+    '2026-01-01':'元旦','2026-01-02':'元旦','2026-01-03':'元旦',
+    '2026-02-15':'春节','2026-02-16':'春节','2026-02-17':'春节','2026-02-18':'春节',
+    '2026-02-19':'春节','2026-02-20':'春节','2026-02-21':'春节','2026-02-22':'春节','2026-02-23':'春节',
+    '2026-04-04':'清明节','2026-04-05':'清明节','2026-04-06':'清明节',
+    '2026-05-01':'劳动节','2026-05-02':'劳动节','2026-05-03':'劳动节','2026-05-04':'劳动节','2026-05-05':'劳动节',
+    '2026-06-19':'端午节','2026-06-20':'端午节','2026-06-21':'端午节',
+    '2026-09-25':'中秋节','2026-09-26':'中秋节','2026-09-27':'中秋节',
+    '2026-10-01':'国庆节','2026-10-02':'国庆节','2026-10-03':'国庆节','2026-10-04':'国庆节',
+    '2026-10-05':'国庆节','2026-10-06':'国庆节','2026-10-07':'国庆节',
+  };
+  // 调休上班日（本该周末休息，但要上班）
+  const WORKDAYS = {
+    '2026-01-04':1,'2026-02-14':1,'2026-02-28':1,'2026-05-09':1,
+    '2026-09-20':1,'2026-10-10':1,
+  };
 
   // ---------- 数据 ----------
   let data = load();
@@ -206,21 +243,34 @@
     const isToday = sameDay(d, today);
     const isSel = sameDay(d, sel);
     const isWk = d.getDay()===0 || d.getDay()===6;
+    const hName = HOLIDAYS[k] || '';
+    const isWork = WORKDAYS[k];
     let cls = 'day' + (dim?' dim':'') + (isToday?' today':'') + (isSel?' selected':'') + (isWk?' wk':'');
+    if(hName) cls += ' holiday';
+    if(isWork) cls += ' is-work';
+    // 节日名标签（调休上班显示「班」）
+    let label = '';
+    if(hName) label = `<div class="holiday-label">${hName}</div>`;
+    else if(isWork) label = `<div class="holiday-label work">班</div>`;
     let dots = '';
     if(ts.length){
       const allDone = ts.every(t=>t.done);
       dots = `<div class="dots">${ts.slice(0,4).map(t=>`<i class="${t.done?'done-all':''}"></i>`).join('')}</div>`;
     }
     return `<div class="${cls}" data-key="${k}" data-inmonth="${inMonth?1:0}">` +
-      `<div class="num">${dayNum}</div>` + dots + `</div>`;
+      `<div class="num">${dayNum}</div>` + label + dots + `</div>`;
   }
 
   // ---------- 渲染当日任务 ----------
   function renderDay(){
     const k = keyOf(sel);
     $('dayTitle').textContent = (sel.getMonth()+1)+'月'+sel.getDate()+'日';
-    const weekday = document.querySelector('.day-head .weekday');
+    const hName = HOLIDAYS[k] || '';
+    const isWork = WORKDAYS[k];
+    let wk = WEEK[sel.getDay()];
+    if(hName) wk += ' · ' + hName;
+    else if(isWork) wk += ' · 调休上班';
+    $('dayWeek').textContent = wk;
     const ts = tasksOf(k);
     $('dayCount').textContent = ts.length ? (ts.filter(t=>t.done).length + '/' + ts.length + ' 完成') : '';
     // 排序：未完成在前，再按时间
