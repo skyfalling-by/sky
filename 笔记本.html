@@ -107,6 +107,16 @@
     font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center}
   .hint{font-size:12px;color:var(--muted);margin-top:4px}
 
+  /* 全屏图片查看器 */
+  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:100;display:flex;align-items:center;justify-content:center;
+    opacity:0;pointer-events:none;transition:opacity .2s;cursor:zoom-out}
+  .lightbox.show{opacity:1;pointer-events:auto}
+  .lightbox img{max-width:96vw;max-height:96vh;object-fit:contain;border-radius:6px;transform:scale(.92);transition:transform .2s}
+  .lightbox.show img{transform:scale(1)}
+  .lightbox .lb-close{position:absolute;top:calc(14px + env(safe-area-inset-top,0px));right:16px;width:40px;height:40px;border-radius:50%;
+    background:rgba(255,255,255,.15);color:#fff;border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .lightbox .lb-tip{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.6);font-size:12px}
+
   /* 笔记详情查看 */
   .view-title{font-size:20px;font-weight:700;margin:0 0 10px}
   .view-content{font-size:15px;white-space:pre-wrap;word-break:break-word;line-height:1.7}
@@ -241,6 +251,13 @@
       <button class="btn danger" id="btnClear">🗑️ 清空全部</button>
     </div>
   </div>
+</div>
+
+<!-- 全屏图片查看器 -->
+<div class="lightbox" id="lightbox">
+  <button class="lb-close" id="lbClose">✕</button>
+  <img id="lbImg" src="" alt="">
+  <div class="lb-tip">点击任意处关闭</div>
 </div>
 
 <script>
@@ -425,7 +442,7 @@
     $('noteOverlay').classList.add('show');
   }
   function renderImgGrid(){
-    let html = tempImages.map((img,i)=>`<div class="img-item"><img src="${img}"><button class="x" data-rmimg="${i}">✕</button></div>`).join('');
+    let html = tempImages.map((img,i)=>`<div class="img-item"><img src="${img}" data-zoom="${i}"><button class="x" data-rmimg="${i}">✕</button></div>`).join('');
     html += `<button class="add-img-btn" id="addImgBtn">＋</button>`;
     $('imgGrid').innerHTML = html;
     const btn = document.getElementById('addImgBtn');
@@ -433,30 +450,56 @@
   }
   $('imgGrid').addEventListener('click', e=>{
     const rm = e.target.closest('[data-rmimg]');
-    if(rm){ tempImages.splice(parseInt(rm.dataset.rmimg),1); renderImgGrid(); }
+    if(rm){ e.stopPropagation(); tempImages.splice(parseInt(rm.dataset.rmimg),1); renderImgGrid(); return; }
+    const z = e.target.closest('[data-zoom]');
+    if(z){ openLightbox(tempImages[parseInt(z.dataset.zoom)]); }
   });
   $('imgInput').addEventListener('change', e=>{
     const files = Array.from(e.target.files);
-    files.forEach(f=>{ compressImage(f, (dataUrl)=>{ tempImages.push(dataUrl); renderImgGrid(); }); });
     e.target.value='';
+    if(!files.length) return;
+    // 批量处理：一次性压缩完所有图，只重画一次，避免每张卡一次
+    compressAll(files, (dataUrls)=>{
+      tempImages = tempImages.concat(dataUrls);
+      renderImgGrid();
+    });
   });
 
-  function compressImage(file, cb){
-    const reader = new FileReader();
-    reader.onload = ev=>{
-      const img = new Image();
-      img.onload = ()=>{
-        const maxW = 900;
-        let w = img.width, h = img.height;
-        if(w > maxW){ h = h*maxW/w; w = maxW; }
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img,0,0,w,h);
-        cb(canvas.toDataURL('image/jpeg', 0.72));
+  function compressImage(file){
+    return new Promise((resolve)=>{
+      const reader = new FileReader();
+      reader.onload = ev=>{
+        const img = new Image();
+        img.onload = ()=>{
+          const maxW = 900;
+          let w = img.width, h = img.height;
+          if(w > maxW){ h = h*maxW/w; w = maxW; }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img,0,0,w,h);
+          resolve(canvas.toDataURL('image/jpeg', 0.72));
+        };
+        img.onerror = ()=>resolve(null);
+        img.src = ev.target.result;
       };
-      img.src = ev.target.result;
-    };
-    reader.readAsDataURL(file);
+      reader.onerror = ()=>resolve(null);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function compressAll(files, cb){
+    const results = [];
+    // 显示处理中状态
+    const btn = document.getElementById('addImgBtn');
+    if(btn) btn.textContent = '…';
+    for(const f of files){
+      // 让出主线程，避免连续压缩卡死界面
+      await new Promise(r=>setTimeout(r, 0));
+      const url = await compressImage(f);
+      if(url) results.push(url);
+    }
+    if(btn) btn.textContent = '＋';
+    cb(results);
   }
 
   $('btnSaveNote').onclick = ()=>{
@@ -483,9 +526,22 @@
     $('viewTitle').textContent = n.title||'（无标题）';
     $('viewContent').textContent = n.content||'';
     $('viewMeta').textContent = '📅 ' + fmt(n.updated||n.created);
-    $('viewImgs').innerHTML = (n.images||[]).map(i=>`<img class="view-img" src="${i}">`).join('');
+    $('viewImgs').innerHTML = (n.images||[]).map(i=>`<img class="view-img" src="${i}" style="cursor:zoom-in">`).join('');
     $('viewOverlay').classList.add('show');
   }
+  $('viewImgs').addEventListener('click', e=>{
+    const img = e.target.closest('img.view-img');
+    if(img) openLightbox(img.src);
+  });
+
+  // 全屏图片查看器
+  function openLightbox(src){
+    $('lbImg').src = src;
+    $('lightbox').classList.add('show');
+  }
+  function closeLightbox(){ $('lightbox').classList.remove('show'); }
+  $('lbClose').onclick = closeLightbox;
+  $('lightbox').addEventListener('click', e=>{ if(e.target!==e.currentTarget.querySelector('img') && e.target.id!=='lbImg') closeLightbox(); });
   $('btnCloseView').onclick = ()=> $('viewOverlay').classList.remove('show');
   $('btnEditNote').onclick = ()=>{ const id=viewingId; $('viewOverlay').classList.remove('show'); openNoteModal(id); };
   $('btnDelNote').onclick = ()=>{
