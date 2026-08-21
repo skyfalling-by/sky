@@ -109,13 +109,13 @@
 
   /* 全屏图片查看器 */
   .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:100;display:flex;align-items:center;justify-content:center;
-    opacity:0;pointer-events:none;transition:opacity .2s;cursor:zoom-out}
+    opacity:0;pointer-events:none;transition:opacity .2s;overflow:hidden}
   .lightbox.show{opacity:1;pointer-events:auto}
-  .lightbox img{max-width:96vw;max-height:96vh;object-fit:contain;border-radius:6px;transform:scale(.92);transition:transform .2s}
-  .lightbox.show img{transform:scale(1)}
+  .lightbox img{max-width:96vw;max-height:96vh;object-fit:contain;border-radius:6px;transform:scale(1);transition:transform .15s ease-out;
+    cursor:grab;touch-action:none;user-select:none;-webkit-user-drag:none}
   .lightbox .lb-close{position:absolute;top:calc(14px + env(safe-area-inset-top,0px));right:16px;width:40px;height:40px;border-radius:50%;
     background:rgba(255,255,255,.15);color:#fff;border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-  .lightbox .lb-tip{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.6);font-size:12px}
+  .lightbox .lb-tip{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.6);font-size:12px;pointer-events:none}
 
   /* 笔记详情查看 */
   .view-title{font-size:20px;font-weight:700;margin:0 0 10px}
@@ -535,13 +535,63 @@
   });
 
   // 全屏图片查看器
+  let lbScale = 1;              // 当前缩放倍数
+  const LB_MIN = 1, LB_MAX = 5; // 上下限：1倍 ~ 5倍
   function openLightbox(src){
     $('lbImg').src = src;
+    lbScale = 1;
+    $('lbImg').style.transform = 'scale(1)';
     $('lightbox').classList.add('show');
   }
   function closeLightbox(){ $('lightbox').classList.remove('show'); }
   $('lbClose').onclick = closeLightbox;
-  $('lightbox').addEventListener('click', e=>{ if(e.target!==e.currentTarget.querySelector('img') && e.target.id!=='lbImg') closeLightbox(); });
+  $('lightbox').addEventListener('click', e=>{ if(e.target===e.currentTarget) closeLightbox(); });
+
+  // 滚轮缩放
+  $('lightbox').addEventListener('wheel', e=>{
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.2 : -0.2; // 向上滚放大，向下滚缩小
+    lbScale = Math.min(LB_MAX, Math.max(LB_MIN, lbScale + delta));
+    $('lbImg').style.transform = `scale(${lbScale})`;
+  }, { passive:false });
+
+  // 拖拽平移（放大后可拖动查看）
+  let dragging = false, startX = 0, startY = 0, imgX = 0, imgY = 0;
+  const lbImg = $('lbImg');
+  lbImg.addEventListener('mousedown', e=>{
+    dragging = true; startX = e.clientX - imgX; startY = e.clientY - imgY;
+    lbImg.style.cursor = 'grabbing'; e.preventDefault();
+  });
+  window.addEventListener('mousemove', e=>{
+    if(!dragging) return;
+    imgX = e.clientX - startX; imgY = e.clientY - startY;
+    lbImg.style.transform = `scale(${lbScale}) translate(${imgX}px, ${imgY}px)`;
+  });
+  window.addEventListener('mouseup', ()=>{ dragging = false; lbImg.style.cursor = 'grab'; });
+
+  // 触屏：单指拖动，双指缩放
+  let pinchDist = 0;
+  lbImg.addEventListener('touchstart', e=>{
+    if(e.touches.length === 1){
+      dragging = true; startX = e.touches[0].clientX - imgX; startY = e.touches[0].clientY - imgY;
+    } else if(e.touches.length === 2){
+      dragging = false;
+      pinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    }
+  }, { passive:false });
+  lbImg.addEventListener('touchmove', e=>{
+    if(e.touches.length === 1 && dragging){
+      imgX = e.touches[0].clientX - startX; imgY = e.touches[0].clientY - startY;
+      lbImg.style.transform = `scale(${lbScale}) translate(${imgX}px, ${imgY}px)`;
+    } else if(e.touches.length === 2){
+      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      const ratio = d / pinchDist;
+      lbScale = Math.min(LB_MAX, Math.max(LB_MIN, lbScale * ratio));
+      pinchDist = d;
+      lbImg.style.transform = `scale(${lbScale}) translate(${imgX}px, ${imgY}px)`;
+    }
+  }, { passive:false });
+  lbImg.addEventListener('touchend', ()=>{ dragging = false; });
   $('btnCloseView').onclick = ()=> $('viewOverlay').classList.remove('show');
   $('btnEditNote').onclick = ()=>{ const id=viewingId; $('viewOverlay').classList.remove('show'); openNoteModal(id); };
   $('btnDelNote').onclick = ()=>{
