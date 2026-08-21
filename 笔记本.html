@@ -535,60 +535,74 @@
   });
 
   // 全屏图片查看器
-  let lbScale = 1;              // 当前缩放倍数
-  const LB_MIN = 1, LB_MAX = 5; // 上下限：1倍 ~ 5倍
+  let lbScale = 1;               // 当前缩放倍数
+  const LB_MIN = 1, LB_MAX = 5;  // 上下限：1倍 ~ 5倍
+  let lbX = 0, lbY = 0;          // 平移偏移（像素）
+  const lbImg = $('lbImg');
+
+  function applyLb(){
+    lbImg.style.transform = `translate(${lbX}px, ${lbY}px) scale(${lbScale})`;
+  }
   function openLightbox(src){
     $('lbImg').src = src;
-    lbScale = 1;
-    $('lbImg').style.transform = 'scale(1)';
+    lbScale = 1; lbX = 0; lbY = 0;
+    applyLb();
     $('lightbox').classList.add('show');
   }
   function closeLightbox(){ $('lightbox').classList.remove('show'); }
   $('lbClose').onclick = closeLightbox;
   $('lightbox').addEventListener('click', e=>{ if(e.target===e.currentTarget) closeLightbox(); });
 
-  // 滚轮缩放
+  // 滚轮缩放（以图片中心为基准，缩放后平移同步缩放，避免漂移）
   $('lightbox').addEventListener('wheel', e=>{
     e.preventDefault();
-    const delta = e.deltaY < 0 ? 0.2 : -0.2; // 向上滚放大，向下滚缩小
-    lbScale = Math.min(LB_MAX, Math.max(LB_MIN, lbScale + delta));
-    $('lbImg').style.transform = `scale(${lbScale})`;
+    const old = lbScale;
+    const next = old + (e.deltaY < 0 ? 0.2 : -0.2);
+    lbScale = Math.min(LB_MAX, Math.max(LB_MIN, next));
+    // 平移按比例缩放，保持视觉中心不变
+    const r = lbScale / old;
+    lbX *= r; lbY *= r;
+    if(lbScale <= LB_MIN){ lbX = 0; lbY = 0; } // 回到1倍时归位
+    applyLb();
   }, { passive:false });
 
   // 拖拽平移（放大后可拖动查看）
-  let dragging = false, startX = 0, startY = 0, imgX = 0, imgY = 0;
-  const lbImg = $('lbImg');
+  let dragging = false, lastX = 0, lastY = 0;
   lbImg.addEventListener('mousedown', e=>{
-    dragging = true; startX = e.clientX - imgX; startY = e.clientY - imgY;
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
     lbImg.style.cursor = 'grabbing'; e.preventDefault();
   });
   window.addEventListener('mousemove', e=>{
     if(!dragging) return;
-    imgX = e.clientX - startX; imgY = e.clientY - startY;
-    lbImg.style.transform = `scale(${lbScale}) translate(${imgX}px, ${imgY}px)`;
+    lbX += e.clientX - lastX;
+    lbY += e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    applyLb();
   });
   window.addEventListener('mouseup', ()=>{ dragging = false; lbImg.style.cursor = 'grab'; });
 
   // 触屏：单指拖动，双指缩放
-  let pinchDist = 0;
+  let pinchDist = 0, pinchScale = 1;
   lbImg.addEventListener('touchstart', e=>{
     if(e.touches.length === 1){
-      dragging = true; startX = e.touches[0].clientX - imgX; startY = e.touches[0].clientY - imgY;
+      dragging = true; lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
     } else if(e.touches.length === 2){
       dragging = false;
       pinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      pinchScale = lbScale;
     }
   }, { passive:false });
   lbImg.addEventListener('touchmove', e=>{
     if(e.touches.length === 1 && dragging){
-      imgX = e.touches[0].clientX - startX; imgY = e.touches[0].clientY - startY;
-      lbImg.style.transform = `scale(${lbScale}) translate(${imgX}px, ${imgY}px)`;
+      lbX += e.touches[0].clientX - lastX;
+      lbY += e.touches[0].clientY - lastY;
+      lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+      applyLb();
     } else if(e.touches.length === 2){
       const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-      const ratio = d / pinchDist;
-      lbScale = Math.min(LB_MAX, Math.max(LB_MIN, lbScale * ratio));
-      pinchDist = d;
-      lbImg.style.transform = `scale(${lbScale}) translate(${imgX}px, ${imgY}px)`;
+      lbScale = Math.min(LB_MAX, Math.max(LB_MIN, pinchScale * (d / pinchDist)));
+      if(lbScale <= LB_MIN){ lbX = 0; lbY = 0; }
+      applyLb();
     }
   }, { passive:false });
   lbImg.addEventListener('touchend', ()=>{ dragging = false; });
